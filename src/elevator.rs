@@ -1,5 +1,5 @@
 use crate::button::LedButtonTrait;
-use alloc::boxed::Box;
+use alloc::{boxed::Box, format};
 use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::{Point, Size},
@@ -28,7 +28,6 @@ pub enum DoorState {
 struct Floor {
     number: i8,
     label: &'static str,
-    pronunciation: &'static [u8],
     stop: bool,
     button: Box<dyn LedButtonTrait>,
 }
@@ -43,17 +42,16 @@ pub struct Elevator {
 }
 
 impl Elevator {
-    pub fn new(floors: [(i8, &'static str, &'static [u8], Box<dyn LedButtonTrait>); 8]) -> Self {
+    pub fn new(floors: [(i8, &'static str, Box<dyn LedButtonTrait>); 8]) -> Self {
         // find the index of floor 1
-        let index = floors.iter().position(|(number, _, _, _)| *number == 1);
+        let index = floors.iter().position(|(number, _, _)| *number == 1);
         Self {
             current_floor_index: index.unwrap(),
             direction: Direction::Idle,
             door: DoorState::Closed,
-            floors: floors.map(|(number, label, pronunciation, button)| Floor {
+            floors: floors.map(|(number, label, button)| Floor {
                 number,
                 label,
-                pronunciation,
                 stop: false,
                 button,
             }),
@@ -172,7 +170,16 @@ impl Elevator {
                     }
                     0 => {
                         if let Some(callback) = &mut self.announce {
-                            callback(self.floors[self.current_floor_index].pronunciation);
+                            let floor = &self.floors[self.current_floor_index];
+                            let is_basement = floor.number < 0;
+                            callback(
+                                format!(
+                                    "{}<NUMK VAL={} COUNTER=kai>de'_su,\r",
+                                    if is_basement { "chi'ka/" } else { "" },
+                                    floor.number.abs()
+                                )
+                                .as_bytes(),
+                            );
                         }
                         self.set_door(DoorState::Opening(progress + 5)); // 2 secs to complete
                     }

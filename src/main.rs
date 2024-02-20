@@ -207,54 +207,14 @@ fn main() -> ! {
     }
 
     let mut elevator = elevator::Elevator::new([
-        (
-            -2,
-            "B2",
-            b"chi'ka/<NUMK VAL=2 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio22, pins.gpio27),
-        ),
-        (
-            -1,
-            "B1",
-            b"chi'ka/<NUMK VAL=1 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio26, pins.gpio28),
-        ),
-        (
-            1,
-            "1",
-            b"<NUMK VAL=1 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio19, pins.gpio21),
-        ),
-        (
-            2,
-            "2",
-            b"<NUMK VAL=2 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio18, pins.gpio20),
-        ),
-        (
-            3,
-            "3",
-            b"<NUMK VAL=3 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio10, pins.gpio8),
-        ),
-        (
-            4,
-            "4",
-            b"<NUMK VAL=4 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio11, pins.gpio9),
-        ),
-        (
-            5,
-            "5",
-            b"<NUMK VAL=5 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio13, pins.gpio14),
-        ),
-        (
-            6,
-            "6",
-            b"<NUMK VAL=6 COUNTER=kai>de'_su,\r",
-            led_button_new!(pins.gpio12, pins.gpio15),
-        ),
+        (-2, "B2", led_button_new!(pins.gpio22, pins.gpio27)),
+        (-1, "B1", led_button_new!(pins.gpio26, pins.gpio28)),
+        (1, "1", led_button_new!(pins.gpio19, pins.gpio21)),
+        (2, "2", led_button_new!(pins.gpio18, pins.gpio20)),
+        (3, "3", led_button_new!(pins.gpio10, pins.gpio8)),
+        (4, "4", led_button_new!(pins.gpio11, pins.gpio9)),
+        (5, "5", led_button_new!(pins.gpio13, pins.gpio14)),
+        (6, "6", led_button_new!(pins.gpio12, pins.gpio15)),
     ]);
 
     elevator.on_announce(move |message: &[u8]| {
