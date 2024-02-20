@@ -1,3 +1,4 @@
+use crate::button::LedButtonTrait;
 use alloc::boxed::Box;
 use embedded_graphics::{
     draw_target::DrawTarget,
@@ -7,6 +8,7 @@ use embedded_graphics::{
     primitives::{PrimitiveStyleBuilder, Rectangle, StyledDrawable, Triangle},
     text::Text,
 };
+use rp_pico::pac::pio0::flevel;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Direction {
@@ -28,6 +30,7 @@ struct Floor {
     label: &'static str,
     pronunciation: &'static [u8],
     stop: bool,
+    button: Box<dyn LedButtonTrait>,
 }
 
 pub struct Elevator {
@@ -35,26 +38,25 @@ pub struct Elevator {
     direction: Direction,
     door: DoorState,
     floors: [Floor; 8],
-    floor_to_be_open_changed: Option<Box<dyn FnMut(usize, bool)>>,
     repaint: Option<Box<dyn FnMut()>>,
     announce: Option<Box<dyn FnMut(&[u8])>>,
 }
 
 impl Elevator {
-    pub fn new(floors: [(i8, &'static str, &'static [u8]); 8]) -> Self {
+    pub fn new(floors: [(i8, &'static str, &'static [u8], Box<dyn LedButtonTrait>); 8]) -> Self {
         // find the index of floor 1
-        let index = floors.iter().position(|(number, _, _)| *number == 1);
+        let index = floors.iter().position(|(number, _, _, _)| *number == 1);
         Self {
             current_floor_index: index.unwrap(),
             direction: Direction::Idle,
             door: DoorState::Closed,
-            floors: floors.map(|(number, label, pronunciation)| Floor {
+            floors: floors.map(|(number, label, pronunciation, button)| Floor {
                 number,
                 label,
                 pronunciation,
                 stop: false,
+                button,
             }),
-            floor_to_be_open_changed: None,
             repaint: None,
             announce: None,
         }
@@ -148,6 +150,19 @@ impl Elevator {
     }
 
     pub fn advance(&mut self) {
+        // check if button is clicked
+        for (index, floor) in self.floors.iter_mut().enumerate() {
+            if floor.button.is_pressed().unwrap() {
+                if !floor.stop {
+                    floor.stop = true;
+                    floor.button.turn_on().unwrap();
+                    if self.direction == Direction::Idle && self.current_floor_index == index {
+                        self.set_door(DoorState::Opening(0));
+                        return;
+                    }
+                }
+            }
+        }
         // while door is moving, do it
         match self.door {
             DoorState::Opening(progress) => {
@@ -177,7 +192,9 @@ impl Elevator {
                 match progress {
                     100 => {
                         if self.floors[self.current_floor_index].stop {
-                            self.set_stop(self.floors[self.current_floor_index].number, false);
+                            let floor = &mut self.floors[self.current_floor_index];
+                            floor.stop = false;
+                            floor.button.turn_off().unwrap();
                         }
                         self.set_door(DoorState::Closed);
                     }
@@ -260,13 +277,6 @@ impl Elevator {
         }
     }
 
-    pub fn on_floor_to_be_open_changed<F>(&mut self, callback: F)
-    where
-        F: FnMut(usize, bool) + 'static,
-    {
-        self.floor_to_be_open_changed = Some(Box::new(callback));
-    }
-
     pub fn on_repaint<F>(&mut self, callback: F)
     where
         F: FnMut() + 'static,
@@ -287,23 +297,6 @@ impl Elevator {
 
     pub fn index_to_floor(&self, index: usize) -> i8 {
         self.floors[index].number
-    }
-
-    pub fn set_stop(&mut self, floor: i8, value: bool) -> bool {
-        let index = self.floor_to_index(floor);
-        let current_floor = &self.floors[index];
-        let current_value = current_floor.stop;
-        if current_value == value {
-            return false;
-        }
-        self.floors[index].stop = value;
-        if let Some(callback) = &mut self.floor_to_be_open_changed {
-            callback(index, value);
-        }
-        if self.direction == Direction::Idle && self.current_floor_index == index {
-            self.set_door(DoorState::Opening(0));
-        }
-        true
     }
 
     pub fn set_door_open(&mut self, value: bool) -> bool {

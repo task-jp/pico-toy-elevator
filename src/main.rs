@@ -154,10 +154,9 @@ fn main() -> ! {
     );
 
     // ボタンの管理
-    let mut buttons: heapless::Vec<Box<dyn button::LedButtonTrait>, 10> = heapless::Vec::new();
+    let mut buttons: heapless::Vec<Box<dyn button::LedButtonTrait>, 2> = heapless::Vec::new();
 
     // LedButton インスタンスを作成して Vec に追加するマクロ
-    // #[macro_export]
     macro_rules! push_led_button {
         ($led:expr, $button:expr) => {
             let _ = buttons.push(Box::new(button::LedButton::new(
@@ -166,14 +165,6 @@ fn main() -> ! {
             )));
         };
     }
-    push_led_button!(pins.gpio22, pins.gpio27); // B2
-    push_led_button!(pins.gpio26, pins.gpio28); // B1
-    push_led_button!(pins.gpio19, pins.gpio21); // 1
-    push_led_button!(pins.gpio18, pins.gpio20); // 2
-    push_led_button!(pins.gpio10, pins.gpio8); // 3
-    push_led_button!(pins.gpio11, pins.gpio9); // 4
-    push_led_button!(pins.gpio13, pins.gpio14); // 5
-    push_led_button!(pins.gpio12, pins.gpio15); // 6
     push_led_button!(pins.gpio4, pins.gpio2); // A
     push_led_button!(pins.gpio5, pins.gpio3); // B
 
@@ -206,48 +197,92 @@ fn main() -> ! {
         )
         .unwrap();
 
+    macro_rules! led_button_new {
+        ($led:expr, $button:expr) => {
+            Box::new(button::LedButton::new(
+                $led.into_push_pull_output_in_state(PinState::High),
+                $button.into_pull_up_input(),
+            ))
+        };
+    }
+
     let mut elevator = elevator::Elevator::new([
-        (-2, "B2", b"chi'ka/<NUMK VAL=2 COUNTER=kai>de'_su,\r"),
-        (-1, "B1", b"chi'ka/<NUMK VAL=1 COUNTER=kai>de'_su,\r"),
-        (1, "1", b"<NUMK VAL=1 COUNTER=kai>de'_su,\r"),
-        (2, "2", b"<NUMK VAL=2 COUNTER=kai>de'_su,\r"),
-        (3, "3", b"<NUMK VAL=3 COUNTER=kai>de'_su,\r"),
-        (4, "4", b"<NUMK VAL=4 COUNTER=kai>de'_su,\r"),
-        (5, "5", b"<NUMK VAL=5 COUNTER=kai>de'_su,\r"),
-        (6, "6", b"<NUMK VAL=6 COUNTER=kai>de'_su,\r"),
+        (
+            -2,
+            "B2",
+            b"chi'ka/<NUMK VAL=2 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio22, pins.gpio27),
+        ),
+        (
+            -1,
+            "B1",
+            b"chi'ka/<NUMK VAL=1 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio26, pins.gpio28),
+        ),
+        (
+            1,
+            "1",
+            b"<NUMK VAL=1 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio19, pins.gpio21),
+        ),
+        (
+            2,
+            "2",
+            b"<NUMK VAL=2 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio18, pins.gpio20),
+        ),
+        (
+            3,
+            "3",
+            b"<NUMK VAL=3 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio10, pins.gpio8),
+        ),
+        (
+            4,
+            "4",
+            b"<NUMK VAL=4 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio11, pins.gpio9),
+        ),
+        (
+            5,
+            "5",
+            b"<NUMK VAL=5 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio13, pins.gpio14),
+        ),
+        (
+            6,
+            "6",
+            b"<NUMK VAL=6 COUNTER=kai>de'_su,\r",
+            led_button_new!(pins.gpio12, pins.gpio15),
+        ),
     ]);
 
     elevator.on_announce(move |message: &[u8]| {
         uart.write_full_blocking(message);
     });
 
+    delay.delay_ms(100);
     loop {
         let mut i = 0;
         display.clear(BinaryColor::Off).unwrap();
         for button in buttons.iter_mut() {
             if button.is_pressed().unwrap() {
                 match i {
-                    8 => {
+                    0 => {
                         if elevator.set_door_open(false) {
                             button.turn_on().unwrap();
                         } else {
                             button.turn_off().unwrap();
                         }
                     }
-                    9 => {
+                    1 => {
                         if elevator.set_door_open(true) {
                             button.turn_on().unwrap();
                         } else {
                             button.turn_off().unwrap();
                         }
                     }
-                    _ => {
-                        if elevator.set_stop(elevator.index_to_floor(i as usize), true) {
-                            button.turn_on().unwrap();
-                        } else {
-                            button.turn_off().unwrap();
-                        }
-                    }
+                    _ => {}
                 }
             } else {
                 button.turn_off().unwrap();
