@@ -1,5 +1,3 @@
-use core::{cmp::Ordering, panic};
-
 use alloc::boxed::Box;
 use embedded_graphics::{
     draw_target::DrawTarget,

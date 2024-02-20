@@ -4,6 +4,7 @@ pub trait LedButtonTrait {
     fn is_pressed(&self) -> Option<bool>;
     fn turn_on(&mut self) -> Option<()>;
     fn turn_off(&mut self) -> Option<()>;
+    fn set_on(&mut self, on: bool) -> Option<()>;
 }
 
 pub struct LedButton<LED, BUTTON> {
@@ -36,5 +37,9 @@ where
 
     fn turn_off(&mut self) -> Option<()> {
         self.led.set_high().ok()
+    }
+
+    fn set_on(&mut self, on: bool) -> Option<()> {
+        self.led.set_state(on.into()).ok()
     }
 }

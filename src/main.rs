@@ -11,17 +11,12 @@ use alloc::format;
 use alloc::string::ToString;
 use bsp::entry;
 use bsp::hal::{
-    self,
     clocks::{init_clocks_and_plls, Clock},
     pac,
     sio::Sio,
     uart::{DataBits, StopBits, UartConfig},
     watchdog::Watchdog,
 };
-use core::cell::RefCell;
-use core::ops::DerefMut;
-use critical_section::Mutex;
-use defmt_rtt as _;
 use embedded_alloc::Heap;
 use embedded_graphics::{
     mono_font::{ascii::FONT_5X8, MonoTextStyleBuilder},
@@ -31,23 +26,8 @@ use embedded_graphics::{
 };
 use embedded_hal::digital::v2::PinState;
 use fugit::RateExtU32;
-use hal::gpio::bank0::{Gpio0, Gpio1};
-use hal::pac::interrupt;
-// use panic_probe as _;
 use rp_pico as bsp;
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
-
-/// Alias the type for our UART pins to make things clearer.
-type UartPins = (
-    hal::gpio::Pin<Gpio0, hal::gpio::FunctionUart, hal::gpio::PullDown>,
-    hal::gpio::Pin<Gpio1, hal::gpio::FunctionUart, hal::gpio::PullDown>,
-);
-
-/// Alias the type for our UART to make things clearer.
-type Uart = hal::uart::UartPeripheral<hal::uart::Enabled, pac::UART0, UartPins>;
-
-/// This how we transfer the UART into the Interrupt Handler
-static GLOBAL_UART: Mutex<RefCell<Option<Uart>>> = Mutex::new(RefCell::new(None));
 
 const HEAP_SIZE: usize = 200 * 1024;
 static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
@@ -60,7 +40,7 @@ static ALLOCATOR: Heap = Heap::empty();
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    let (mut pac, core) = unsafe { (pac::Peripherals::steal(), pac::CorePeripherals::steal()) };
+    let (mut pac, _core) = unsafe { (pac::Peripherals::steal(), pac::CorePeripherals::steal()) };
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
     let sio = Sio::new(pac.SIO);
     let external_xtal_freq_hz = 12_000_000u32;
@@ -225,34 +205,20 @@ fn main() -> ! {
             clocks.peripheral_clock.freq(),
         )
         .unwrap();
-    critical_section::with(|cs| {
-        GLOBAL_UART.borrow(cs).replace(Some(uart));
-    });
-    unsafe {
-        // Enable the UART interrupt in the *Nested Vectored Interrupt
-        // Controller*, which is part of the Cortex-M0+ core.
-        pac::NVIC::unmask(bsp::hal::pac::Interrupt::UART0_IRQ);
-    }
 
     let mut elevator = elevator::Elevator::new([
-        (-2, "B2", b"chi'ka/<NUMK VAL=2 COUNTER=kai>de'su,\r"),
-        (-1, "B1", b"chi'ka/<NUMK VAL=1 COUNTER=kai>de'su,\r"),
-        (1, "1", b"<NUMK VAL=1 COUNTER=kai>de'su,\r"),
-        (2, "2", b"<NUMK VAL=2 COUNTER=kai>de'su,\r"),
-        (3, "3", b"<NUMK VAL=3 COUNTER=kai>de'su,\r"),
-        (4, "4", b"<NUMK VAL=4 COUNTER=kai>de'su,\r"),
-        (5, "5", b"<NUMK VAL=5 COUNTER=kai>de'su,\r"),
-        (6, "6", b"<NUMK VAL=6 COUNTER=kai>de'su,\r"),
+        (-2, "B2", b"chi'ka/<NUMK VAL=2 COUNTER=kai>de'_su,\r"),
+        (-1, "B1", b"chi'ka/<NUMK VAL=1 COUNTER=kai>de'_su,\r"),
+        (1, "1", b"<NUMK VAL=1 COUNTER=kai>de'_su,\r"),
+        (2, "2", b"<NUMK VAL=2 COUNTER=kai>de'_su,\r"),
+        (3, "3", b"<NUMK VAL=3 COUNTER=kai>de'_su,\r"),
+        (4, "4", b"<NUMK VAL=4 COUNTER=kai>de'_su,\r"),
+        (5, "5", b"<NUMK VAL=5 COUNTER=kai>de'_su,\r"),
+        (6, "6", b"<NUMK VAL=6 COUNTER=kai>de'_su,\r"),
     ]);
 
-    elevator.on_announce(|message: &[u8]| {
-        critical_section::with(|cs| {
-            if let Some(ref mut uart) = GLOBAL_UART.borrow(cs).borrow_mut().deref_mut() {
-                uart.write_full_blocking(message);
-            } else {
-                panic!("UART is not available");
-            }
-        });
+    elevator.on_announce(move |message: &[u8]| {
+        uart.write_full_blocking(message);
     });
 
     loop {
@@ -260,33 +226,29 @@ fn main() -> ! {
         display.clear(BinaryColor::Off).unwrap();
         for button in buttons.iter_mut() {
             if button.is_pressed().unwrap() {
-                critical_section::with(|cs| {
-                    if let Some(ref mut uart) = GLOBAL_UART.borrow(cs).borrow_mut().deref_mut() {
-                        match i {
-                            8 => {
-                                if elevator.set_door_open(false) {
-                                    button.turn_on().unwrap();
-                                } else {
-                                    button.turn_off().unwrap();
-                                }
-                            }
-                            9 => {
-                                if elevator.set_door_open(true) {
-                                    button.turn_on().unwrap();
-                                } else {
-                                    button.turn_off().unwrap();
-                                }
-                            }
-                            _ => {
-                                if elevator.set_stop(elevator.index_to_floor(i as usize), true) {
-                                    button.turn_on().unwrap();
-                                } else {
-                                    button.turn_off().unwrap();
-                                }
-                            }
+                match i {
+                    8 => {
+                        if elevator.set_door_open(false) {
+                            button.turn_on().unwrap();
+                        } else {
+                            button.turn_off().unwrap();
                         }
                     }
-                });
+                    9 => {
+                        if elevator.set_door_open(true) {
+                            button.turn_on().unwrap();
+                        } else {
+                            button.turn_off().unwrap();
+                        }
+                    }
+                    _ => {
+                        if elevator.set_stop(elevator.index_to_floor(i as usize), true) {
+                            button.turn_on().unwrap();
+                        } else {
+                            button.turn_off().unwrap();
+                        }
+                    }
+                }
             } else {
                 button.turn_off().unwrap();
             }
@@ -298,25 +260,3 @@ fn main() -> ! {
         delay.delay_ms(100);
     }
 }
-
-#[interrupt]
-fn UART0_IRQ() {
-    critical_section::with(|cs| {
-        if let Some(uart) = GLOBAL_UART.borrow(cs).borrow_mut().deref_mut() {
-            // Echo the input back to the output until the FIFO is empty. Reading
-            // from the UART should also clear the UART interrupt flag.
-            let mut buffer: [u8; 8] = [0; 8];
-            while let Ok(size) = uart.read_raw(&mut buffer) {
-                panic!("{:?}", &buffer[..size]);
-                // uart.write_raw(&buffer[..size]);
-            }
-        } else {
-            panic!("UART is not available");
-        }
-    });
-
-    // Set an event to ensure the main thread always wakes up, even if it's in
-    // the process of going to sleep.
-    cortex_m::asm::sev();
-}
-// End of file
