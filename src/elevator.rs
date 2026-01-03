@@ -118,7 +118,7 @@ impl Elevator {
                 let lower = lower_floors.iter().position(|f| f.stop);
                 match (upper, lower) {
                     (Some(_), Some(_)) => {
-                        if upper.unwrap() - index < index - lower.unwrap() {
+                        if upper.unwrap() < index - lower.unwrap() {
                             Direction::Up(Some(0))
                         } else {
                             Direction::Down(Some(0))
